@@ -9,6 +9,8 @@
 
 #define DEVICE_NAME "chardev"
 
+static int counter = 0;
+
 static int handle_open(struct inode *, struct file *) {
     pr_info("handle_open");
     return 0;
@@ -17,13 +19,15 @@ static int handle_release(struct inode *, struct file *) {
     pr_info("handle_release");
     return 0;
 }
-static ssize_t handle_read(struct file *, char __user *, size_t, loff_t *) {
-    pr_info("handle_read");
+static ssize_t handle_read(struct file *, char __user *, size_t size, loff_t * offset) {
+    pr_info("You have tried to read for already %i times", counter++);
     return 0;
 }
-static ssize_t handle_write(struct file *, const char __user *, size_t, loff_t *) {
+static ssize_t handle_write(struct file *, const char __user *, size_t size, loff_t * offset) {
     pr_info("handle_write");
-    return 0;
+    // *offset += size;
+    // return size;
+    return -EINVAL;
 }
 
 static struct file_operations fops = {
@@ -33,8 +37,10 @@ static struct file_operations fops = {
     .release = handle_release,
 };
 
-static struct cdev *my_cdev;
 static int major;
+static int minor;
+static struct cdev my_cdev;
+static struct class *cls;
 
 static int __init chardev_init(void)
 {
@@ -55,14 +61,18 @@ static int __init chardev_init(void)
     pr_info("Major is %i", MAJOR(dev_params));
     pr_info("Minor is %i", MINOR(dev_params));
     major = MAJOR(dev_params);
+    minor = MINOR(dev_params);
 
-    my_cdev = cdev_alloc();
-    cdev_init(my_cdev, &fops);
-	err = cdev_add(my_cdev, dev_params, 1);
+    cdev_init(&my_cdev, &fops);
+	err = cdev_add(&my_cdev, dev_params, 1);
 	if (err < 0) {
 		pr_alert("Error: %i", err);
 		return err;
 	}
+
+    // now creating a block device
+    cls = class_create(THIS_MODULE, DEVICE_NAME);
+    device_create(cls, NULL, MKDEV(major, minor), NULL, DEVICE_NAME);
 
     pr_info("Success!");
 
@@ -72,8 +82,11 @@ static int __init chardev_init(void)
 static void __exit chardev_exit(void)
 {
     pr_info("Goodbye, chardev!\n");
-    cdev_del(my_cdev);
-	unregister_chrdev_region(MKDEV(major, 0), 1);
+    device_destroy(cls, MKDEV(major, minor));
+    class_destroy(cls);
+
+    cdev_del(&my_cdev);
+	unregister_chrdev_region(MKDEV(major, minor), 1);
 }
 
 
