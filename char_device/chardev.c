@@ -8,25 +8,49 @@
 // https://elixir.bootlin.com/linux/v6.9.1/source/drivers/char/scx200_gpio.c#L102
 
 #define DEVICE_NAME "chardev"
+#define BUF_LEN 128
 
 static int counter = 0;
 
+static char msg[BUF_LEN];
+
 static int handle_open(struct inode *, struct file *) {
     pr_info("handle_open");
+    sprintf(msg, "I already told you %d times Hello world!\n", counter++);
+
     return 0;
 }
 static int handle_release(struct inode *, struct file *) {
     pr_info("handle_release");
     return 0;
 }
-static ssize_t handle_read(struct file *, char __user *, size_t size, loff_t * offset) {
-    pr_info("You have tried to read for already %i times", counter++);
-    return 0;
+
+static ssize_t handle_read(struct file * f, char __user * buf, size_t length, loff_t * offset) {
+    size_t ret = 0;
+    const char* it;
+
+    pr_info("Offset is %i", (int)(*offset));
+
+    it = msg;
+
+    if (!*(it + *offset)) { /* мы находимся в конце сообщения. */
+        *offset = 0; /* сброс смещения. */
+        return 0; /* обозначение конца файла. */
+    }
+    it += *offset;
+
+    while (length && *it) {
+        put_user(*(it++), buf++);
+        --length;
+        ++ret;
+    }
+
+    *offset += ret;
+
+    return ret;
 }
 static ssize_t handle_write(struct file *, const char __user *, size_t size, loff_t * offset) {
     pr_info("handle_write");
-    // *offset += size;
-    // return size;
     return -EINVAL;
 }
 
