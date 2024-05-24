@@ -14,6 +14,8 @@ static int counter = 0;
 
 static char msg[BUF_LEN];
 
+static char writeBuf[BUF_LEN];
+
 static int handle_open(struct inode *, struct file *) {
     pr_info("handle_open");
     sprintf(msg, "I already told you %d times Hello world!\n", counter++);
@@ -49,9 +51,18 @@ static ssize_t handle_read(struct file * f, char __user * buf, size_t length, lo
 
     return ret;
 }
-static ssize_t handle_write(struct file *, const char __user *, size_t size, loff_t * offset) {
-    pr_info("handle_write");
-    return -EINVAL;
+static ssize_t handle_write(struct file *, const char __user * buff, size_t size, loff_t * offset) {
+    if (copy_from_user(writeBuf, buff, size))
+        return -EFAULT;
+
+    pr_info("Write offset is %i", (int)(*offset));
+
+    if (size < sizeof(writeBuf)) {
+        writeBuf[size] = '\0';
+        pr_info("Write buf is %s", writeBuf);
+    }
+
+    return size;
 }
 
 static struct file_operations fops = {
